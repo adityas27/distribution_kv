@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -9,6 +10,7 @@ type Command struct {
 	Name  string
 	Key   string
 	Value string
+	TTL   int
 }
 
 func Parse(line string) (*Command, error) {
@@ -21,13 +23,7 @@ func Parse(line string) (*Command, error) {
 	switch strings.ToUpper(fields[0]) {
 
 	case "PING":
-		if len(fields) != 1 {
-			return nil, fmt.Errorf("usage: PING")
-		}
-
-		return &Command{
-			Name: "PING",
-		}, nil
+		return &Command{Name: "PING"}, nil
 
 	case "GET":
 		if len(fields) != 2 {
@@ -39,17 +35,6 @@ func Parse(line string) (*Command, error) {
 			Key:  fields[1],
 		}, nil
 
-	case "SET":
-		if len(fields) < 3 {
-			return nil, fmt.Errorf("usage: SET <key> <value>")
-		}
-
-		return &Command{
-			Name:  "SET",
-			Key:   fields[1],
-			Value: strings.Join(fields[2:], " "),
-		}, nil
-
 	case "DELETE":
 		if len(fields) != 2 {
 			return nil, fmt.Errorf("usage: DELETE <key>")
@@ -59,6 +44,33 @@ func Parse(line string) (*Command, error) {
 			Name: "DELETE",
 			Key:  fields[1],
 		}, nil
+
+	case "SET":
+
+		if len(fields) < 3 {
+			return nil, fmt.Errorf("usage: SET <key> <value> [EX seconds]")
+		}
+
+		cmd := &Command{
+			Name:  "SET",
+			Key:   fields[1],
+			Value: fields[2],
+		}
+
+		if len(fields) == 5 {
+			if strings.ToUpper(fields[3]) != "EX" {
+				return nil, fmt.Errorf("expected EX")
+			}
+
+			ttl, err := strconv.Atoi(fields[4])
+			if err != nil {
+				return nil, fmt.Errorf("invalid ttl")
+			}
+
+			cmd.TTL = ttl
+		}
+
+		return cmd, nil
 
 	default:
 		return nil, fmt.Errorf("unknown command")
