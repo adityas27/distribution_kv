@@ -4,19 +4,18 @@ import (
 	"bufio"
 	"fmt"
 	"net"
-	"sync"
 
 	"tcp_test/parser"
+	"tcp_test/storage"
 )
 
 type Server struct {
-	mu    sync.RWMutex
-	store map[string]string
+    cache *storage.Cache
 }
 
 func NewServer() *Server {
 	return &Server{
-		store: make(map[string]string),
+		cache: storage.NewCache(),
 	}
 }
 
@@ -46,7 +45,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	fmt.Println("Client connected:", conn.RemoteAddr())
 
 	scanner := bufio.NewScanner(conn)
-
+	if scanner.Err() != nil{
+		fmt.Println(scanner.Err().Error())
+	}
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -72,28 +73,19 @@ func (s *Server) execute(cmd *parser.Command) string {
 		return "PONG"
 
 	case "SET":
-		s.mu.Lock()
-		s.store[cmd.Key] = cmd.Value
-		s.mu.Unlock()
-
+		s.cache.Set(cmd.Key, cmd.Value, cmd.TTL)
 		return "OK"
 
 	case "GET":
-		s.mu.RLock()
-		value, ok := s.store[cmd.Key]
-		s.mu.RUnlock()
-
+		value, ok := s.cache.Get(cmd.Key)
 		if !ok {
 			return "NULL"
 		}
-
 		return value
 
+	
 	case "DELETE":
-		s.mu.Lock()
-		delete(s.store, cmd.Key)
-		s.mu.Unlock()
-
+		s.cache.Delete(cmd.Key)
 		return "OK"
 
 	default:
@@ -103,7 +95,6 @@ func (s *Server) execute(cmd *parser.Command) string {
 
 func main() {
 	server := NewServer()
-
 	if err := server.Start(":9000"); err != nil {
 		panic(err)
 	}

@@ -4,6 +4,8 @@ import (
 	"container/list"
 	"sync"
 	"time"
+
+	"tcp_test/wal"
 )
 
 const MemoryLimit = 1024*1024*512
@@ -21,14 +23,21 @@ type Cache struct {
 	items         map[string]*Entry
 	lru           *list.List
 	currentMemory int
+
+	wal *wal.WAL
 }
 
 func NewCache() *Cache {
-	c := &Cache{
-		items:         make(map[string]*Entry),
-		lru:           list.New(),
-		currentMemory: 0,
-	}
+	w, err := wal.NewWAL("wal.log")
+    if err != nil {
+        panic(err)
+    }
+
+    c := &Cache{
+        items: make(map[string]*Entry),
+        lru:   list.New(),
+        wal:   w,
+    }
 
 	go c.cleanupWorker()
 	go c.evictionWorker()
@@ -37,8 +46,12 @@ func NewCache() *Cache {
 }
 
 func (c *Cache) Set(key, value string, ttl int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if err := c.wal.SetWAL(key, value, int64(ttl)); err != nil {
+        return
+    }
+
+    c.mu.Lock()
+    defer c.mu.Unlock()
 
 
 	if existing, ok := c.items[key]; ok {
@@ -93,8 +106,12 @@ func (c *Cache) Get(key string) (string, bool) {
 }
 
 func (c *Cache) Delete(key string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if err := c.wal.DeleteWAL(key); err != nil {
+        return
+    }
+
+    c.mu.Lock()
+    defer c.mu.Unlock()
 
 	if entry, ok := c.items[key]; ok {
 		c.currentMemory -= entry.Size
