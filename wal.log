@@ -5,3 +5,11 @@
 {"op":"SET","key":"name","value":"\b1","ts":1780829225}
 {"op":"SET","key":"name\b\b\b\bwowo","value":"1","ts":1780829312}
 {"op":"SET","key":"wowo","value":"1","ts":1780829368}
+{"op":"SET","key":"name","value":"aditya","ts":1780940366}
+{"op":"SET","key":"name1","value":"test","ts":1780953022}
+{"op":"SET","key":"name1","value":"t\b\b","ts":1780953032}
+{"op":"SET","key":"name1","value":"test1","ts":1780953055}
+{"op":"SET","key":"foo","value":"bar","ts":1780953926}
+{"op":"SET","key":"foo","value":"bar","ttl":5,"ts":1780954200}
+{"op":"SET","key":"foo","value":"bar","ttl":5,"ts":1780954209}
+{"op":"SET","key":"food\b","value":"a\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b","ts":1780954236}

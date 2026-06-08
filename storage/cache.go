@@ -8,7 +8,7 @@ import (
 	"tcp_test/wal"
 )
 
-const MemoryLimit = 1024*1024*512
+const MemoryLimit = 1024 * 1024 * 512
 const KeysLimit = 100
 
 type Entry struct {
@@ -29,15 +29,15 @@ type Cache struct {
 
 func NewCache() *Cache {
 	w, err := wal.NewWAL("wal.log")
-    if err != nil {
-        panic(err)
-    }
+	if err != nil {
+		panic(err)
+	}
 
-    c := &Cache{
-        items: make(map[string]*Entry),
-        lru:   list.New(),
-        wal:   w,
-    }
+	c := &Cache{
+		items: make(map[string]*Entry),
+		lru:   list.New(),
+		wal:   w,
+	}
 
 	go c.cleanupWorker()
 	go c.evictionWorker()
@@ -47,12 +47,11 @@ func NewCache() *Cache {
 
 func (c *Cache) Set(key, value string, ttl int) {
 	if err := c.wal.SetWAL(key, value, int64(ttl)); err != nil {
-        return
-    }
+		return
+	}
 
-    c.mu.Lock()
-    defer c.mu.Unlock()
-
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if existing, ok := c.items[key]; ok {
 		c.currentMemory -= existing.Size
@@ -107,11 +106,11 @@ func (c *Cache) Get(key string) (string, bool) {
 
 func (c *Cache) Delete(key string) {
 	if err := c.wal.DeleteWAL(key); err != nil {
-        return
-    }
+		return
+	}
 
-    c.mu.Lock()
-    defer c.mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if entry, ok := c.items[key]; ok {
 		c.currentMemory -= entry.Size
@@ -182,9 +181,77 @@ func (c *Cache) Stats() map[string]interface{} {
 	defer c.mu.RUnlock()
 
 	return map[string]interface{}{
-		"items":         len(c.items),
-		"memory_used":   c.currentMemory,
-		"memory_limit":  MemoryLimit,
-		"keys_limit":    KeysLimit,
+		"items":        len(c.items),
+		"memory_used":  c.currentMemory,
+		"memory_limit": MemoryLimit,
+		"keys_limit":   KeysLimit,
 	}
+}
+
+// GetSnapshotEntries returns a copy of all cache entries for snapshot creation.
+// Holds a read lock only while copying the entries to minimize contention.
+func (c *Cache) GetSnapshotEntries() map[string]interface{} {
+	entries := make(map[string]interface{})
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for key, entry := range c.items {
+		entries[key] = map[string]interface{}{
+			"value":      entry.Value,
+			"expires_at": entry.ExpiresAt,
+		}
+	}
+
+	return entries
+}
+
+// RestoreEntry restores an entry to the cache without logging to WAL.
+// Used during recovery from snapshots or WAL replay.
+// Does not update LRU order to avoid interference with recovery.
+func (c *Cache) RestoreEntry(key, value string, ttl int, expiresAt time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Remove old entry if it exists
+	if existing, ok := c.items[key]; ok {
+		c.currentMemory -= existing.Size
+		c.lru.Remove(existing.node)
+		delete(c.items, key)
+	}
+
+	// Create new entry
+	entry := &Entry{
+		Value:     value,
+		ExpiresAt: expiresAt,
+		Size:      len(key) + len(value),
+	}
+
+	// Add to LRU list
+	entry.node = c.lru.PushFront(key)
+	c.items[key] = entry
+	c.currentMemory += entry.Size
+
+	// Evict if needed
+	c.evictIfNeeded()
+}
+
+// RestoreDelete deletes an entry from the cache without logging to WAL.
+// Used during WAL replay for DELETE operations.
+func (c *Cache) RestoreDelete(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if entry, ok := c.items[key]; ok {
+		c.currentMemory -= entry.Size
+		c.lru.Remove(entry.node)
+		delete(c.items, key)
+	}
+}
+
+// SetWAL updates the WAL instance, used when rotating WAL files.
+func (c *Cache) SetWAL(newWAL *wal.WAL) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.wal = newWAL
 }

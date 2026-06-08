@@ -3,20 +3,25 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
-
 	"tcp_test/parser"
 	"tcp_test/storage"
+	"tcp_test/persistence"
 )
 
 type Server struct {
-    cache *storage.Cache
+	cache   *storage.Cache
+	manager *persistence.SnapshotManager
 }
 
-func NewServer() *Server {
+// NewServer initializes a new server with persistence and recovery
+func NewServer() (*Server, error) {
+	cache := storage.NewCache()
+
 	return &Server{
-		cache: storage.NewCache(),
-	}
+		cache:   cache,
+	}, nil
 }
 
 func (s *Server) Start(addr string) error {
@@ -94,8 +99,16 @@ func (s *Server) execute(cmd *parser.Command) string {
 }
 
 func main() {
-	server := NewServer()
+	// Initialize server with persistence recovery
+	server, err := NewServer()
+	if err != nil {
+		log.Fatalf("failed to create server: %v", err)
+	}
+
+
+	// Start the TCP server
+	log.Println("Starting Redis-like cache server on :9000")
 	if err := server.Start(":9000"); err != nil {
-		panic(err)
+		log.Fatalf("server error: %v", err)
 	}
 }
