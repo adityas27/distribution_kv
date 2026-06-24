@@ -26,6 +26,28 @@ type Cache struct {
 
 	wal *wal.WAL
 }
+type SnapshotEntry struct {
+	Key       string
+	Value     string
+	ExpiresAt time.Time
+}
+
+func (c *Cache) SnapshotEntries() []SnapshotEntry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entries := make([]SnapshotEntry, 0, len(c.items))
+
+	for key, entry := range c.items {
+		entries = append(entries, SnapshotEntry{
+			Key:       key,
+			Value:     entry.Value,
+			ExpiresAt: entry.ExpiresAt,
+		})
+	}
+
+	return entries
+}
 
 func NewCache() *Cache {
 	w, err := wal.NewWAL("wal.log")

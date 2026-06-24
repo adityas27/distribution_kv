@@ -6,8 +6,8 @@ import (
 	"log"
 	"net"
 	"tcp_test/parser"
-	"tcp_test/storage"
 	"tcp_test/persistence"
+	"tcp_test/storage"
 )
 
 type Server struct {
@@ -20,7 +20,7 @@ func NewServer() (*Server, error) {
 	cache := storage.NewCache()
 
 	return &Server{
-		cache:   cache,
+		cache: cache,
 	}, nil
 }
 
@@ -50,12 +50,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	fmt.Println("Client connected:", conn.RemoteAddr())
 
 	scanner := bufio.NewScanner(conn)
-	if scanner.Err() != nil{
+	if scanner.Err() != nil {
 		fmt.Println(scanner.Err().Error())
 	}
 	for scanner.Scan() {
 		line := scanner.Text()
-
 		cmd, err := parser.Parse(line)
 		if err != nil {
 			fmt.Fprintln(conn, "ERROR", err.Error())
@@ -88,7 +87,6 @@ func (s *Server) execute(cmd *parser.Command) string {
 		}
 		return value
 
-	
 	case "DELETE":
 		s.cache.Delete(cmd.Key)
 		return "OK"
@@ -105,9 +103,8 @@ func main() {
 		log.Fatalf("failed to create server: %v", err)
 	}
 
-
 	// Start the TCP server
-	log.Println("Starting Redis-like cache server on :9000")
+	log.Println("Starting cache server on :9000")
 	if err := server.Start(":9000"); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
