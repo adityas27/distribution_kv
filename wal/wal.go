@@ -1,7 +1,6 @@
 package wal
 
 import (
-	"fmt";
 	"os";
 	"sync";
 	"encoding/json";

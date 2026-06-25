@@ -1,7 +1,6 @@
 package persistence
 
 import (
-	"fmt";
 	"os";
 	"sync";
 	"encoding/json";
