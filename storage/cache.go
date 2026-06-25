@@ -31,7 +31,9 @@ type SnapshotEntry struct {
 	Value     string
 	ExpiresAt time.Time
 }
-
+func (c *Cache) WAL() *wal.WAL {
+    return c.wal
+}
 func (c *Cache) SnapshotEntries() []SnapshotEntry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -67,9 +69,9 @@ func NewCache() *Cache {
 	return c
 }
 
-func (c *Cache) Set(key, value string, ttl int) {
+func (c *Cache) Set(key, value string, ttl int) error {
 	if err := c.wal.SetWAL(key, value, int64(ttl)); err != nil {
-		return
+		return err
 	}
 
 	c.mu.Lock()
@@ -96,7 +98,9 @@ func (c *Cache) Set(key, value string, ttl int) {
 	c.currentMemory += entry.Size
 
 	c.evictIfNeeded() // evict as needed
+	return nil
 }
+
 
 func (c *Cache) Get(key string) (string, bool) {
 	c.mu.RLock()
@@ -126,9 +130,9 @@ func (c *Cache) Get(key string) (string, bool) {
 	return entry.Value, true
 }
 
-func (c *Cache) Delete(key string) {
+func (c *Cache) Delete(key string) error {
 	if err := c.wal.DeleteWAL(key); err != nil {
-		return
+		return err
 	}
 
 	c.mu.Lock()
@@ -139,6 +143,7 @@ func (c *Cache) Delete(key string) {
 		c.lru.Remove(entry.node)
 		delete(c.items, key)
 	}
+	return nil
 }
 
 // removes least recently used items when limits are exceeded
@@ -210,23 +215,7 @@ func (c *Cache) Stats() map[string]interface{} {
 	}
 }
 
-// GetSnapshotEntries returns a copy of all cache entries for snapshot creation.
-// Holds a read lock only while copying the entries to minimize contention.
-func (c *Cache) GetSnapshotEntries() map[string]interface{} {
-	entries := make(map[string]interface{})
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	for key, entry := range c.items {
-		entries[key] = map[string]interface{}{
-			"value":      entry.Value,
-			"expires_at": entry.ExpiresAt,
-		}
-	}
-
-	return entries
-}
 
 // RestoreEntry restores an entry to the cache without logging to WAL.
 // Used during recovery from snapshots or WAL replay.

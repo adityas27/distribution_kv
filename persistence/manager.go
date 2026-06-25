@@ -67,7 +67,21 @@ func (sm *SnapshotManager) Start() error {
 				return
 
 			case <-sm.ticker.C:
-				_ = sm.snapshotWriter.CreateSnapshot(sm.cache)
+				if err := sm.snapshotWriter.CreateSnapshot(sm.cache); err != nil {
+					continue
+				}
+
+				if err := sm.walInstance.Close(); err != nil {
+					continue
+				}
+
+				newWAL, err := wal.NewWAL("wal.log")
+				if err != nil {
+					continue
+				}
+
+				sm.walInstance = newWAL
+				sm.cache.SetWAL(newWAL)
 			}
 		}
 	}()
@@ -87,9 +101,24 @@ func (sm *SnapshotManager) Stop() error {
 }
 
 func (sm *SnapshotManager) CreateSnapshotNow() error {
-	return sm.snapshotWriter.CreateSnapshot(sm.cache)
-}
+	if err := sm.snapshotWriter.CreateSnapshot(sm.cache); err != nil {
+		return err
+	}
 
+	if err := sm.walInstance.Close(); err != nil {
+		return err
+	}
+
+	newWAL, err := wal.NewWAL("wal.log")
+	if err != nil {
+		return err
+	}
+
+	sm.walInstance = newWAL
+	sm.cache.SetWAL(newWAL)
+
+	return nil
+}
 func (sm *SnapshotManager) IsRunning() bool {
 	return atomic.LoadInt32(&sm.isRunning) == 1
 }

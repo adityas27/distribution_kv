@@ -59,7 +59,6 @@ func (w *WAL) SetWAL(key, value string, ttl int64) error {
 	defer w.mu.Unlock()
 
 	_, err = w.file.Write(append(data, '\n'))
-	fmt.Println(data)
 	if err != nil {
 		return err
 	}

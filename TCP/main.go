@@ -19,8 +19,30 @@ type Server struct {
 func NewServer() (*Server, error) {
 	cache := storage.NewCache()
 
+	snapshotCfg := persistence.NewSnapshotConfig(".", "snapshot.json")
+
+	recovery := persistence.NewRecoveryManager(
+		snapshotCfg,
+		"wal.log",
+	)
+
+	if _, err := recovery.Recover(cache); err != nil {
+		return nil, fmt.Errorf("failed to recover: %w", err)
+	}
+
+	manager := persistence.NewSnapshotManager(
+		cache,
+		cache.WAL(),
+		persistence.DefaultSnapshotManagerConfig(),
+	)
+
+	if err := manager.Start(); err != nil {
+		return nil, err
+	}
+
 	return &Server{
-		cache: cache,
+		cache:   cache,
+		manager: manager,
 	}, nil
 }
 
@@ -77,7 +99,9 @@ func (s *Server) execute(cmd *parser.Command) string {
 		return "PONG"
 
 	case "SET":
-		s.cache.Set(cmd.Key, cmd.Value, cmd.TTL)
+		if err := s.cache.Set(cmd.Key, cmd.Value, cmd.TTL); err != nil {
+			return "ERR " + err.Error()
+		}	
 		return "OK"
 
 	case "GET":
@@ -88,17 +112,29 @@ func (s *Server) execute(cmd *parser.Command) string {
 		return value
 
 	case "DELETE":
-		s.cache.Delete(cmd.Key)
+		if err := s.cache.Delete(cmd.Key); err != nil {
+			return "ERR " + err.Error()
+		}
 		return "OK"
 
 	default:
 		return "ERROR unknown command"
 	}
 }
+func (s *Server) Shutdown() {
+	if s.manager != nil {
+		_ = s.manager.CreateSnapshotNow()
+		_ = s.manager.Stop()
+	}
 
+	if s.cache.WAL() != nil {
+		_ = s.cache.WAL().Close()
+	}
+}
 func main() {
 	// Initialize server with persistence recovery
 	server, err := NewServer()
+	
 	if err != nil {
 		log.Fatalf("failed to create server: %v", err)
 	}
@@ -108,4 +144,5 @@ func main() {
 	if err := server.Start(":9000"); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+	defer server.Shutdown()
 }
